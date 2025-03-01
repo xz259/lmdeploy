@@ -1,7 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 
 from pathlib import Path
-from typing import Literal, Union
+from typing import Literal, Union, List, Optional
 
 import torch
 from torch import nn
@@ -190,6 +190,41 @@ def update_moe_mapping(model, model_type):
     NORM_FCS_MAP[LAYER_TYPE_MAP[model_type]] = updated_norm2fcs
 
 
+def prepare_custom_calibration_data(tokenizer, custom_data: List[str], max_seq_len: int):
+    """Prepare custom calibration data.
+    
+    Args:
+        tokenizer: The tokenizer for the model
+        custom_data: List of text samples to use for calibration
+        max_seq_len: Maximum sequence length for tokenization
+        
+    Returns:
+        A dataloader containing the tokenized custom data
+    """
+    import torch
+    from torch.utils.data import TensorDataset, DataLoader
+    
+    # Tokenize all the texts in the custom data
+    tokenized_data = []
+    
+    for text in custom_data:
+        tokens = tokenizer(text, 
+                          max_length=max_seq_len,
+                          truncation=True,
+                          padding="max_length",
+                          return_tensors="pt")
+        tokenized_data.append(tokens.input_ids)
+    
+    # Stack all tokenized sequences into a single tensor
+    all_tokens = torch.cat(tokenized_data, dim=0)
+    
+    # Create a dataloader
+    dataset = TensorDataset(all_tokens)
+    dataloader = DataLoader(dataset, batch_size=1, shuffle=False)
+    
+    return dataloader
+
+
 def calibrate(model: str,
               calib_dataset: str = 'ptb',
               calib_samples: int = 128,
@@ -200,7 +235,8 @@ def calibrate(model: str,
               w_group_size: int = 128,
               search_scale: bool = False,
               dtype: Literal['float16', 'bfloat16', 'auto'] = 'auto',
-              batch_size: int = 1) -> None:
+              batch_size: int = 1,
+              custom_calib_data: Optional[List[str]] = None) -> None:
     """The main function for loading the model and performing calibration on a
     given dataset.
 
@@ -224,6 +260,8 @@ def calibrate(model: str,
         batch_size (int): The batch size for running the calib samples.
             Low GPU mem requires small batch_size. Large batch_size
             reduces the calibration time while costs more VRAM.
+        custom_calib_data (Optional[List[str]]): List of text samples to use for 
+            custom calibration. If provided, calib_dataset will be ignored.
 
     Returns:
         model (nn.Module): The loaded huggingface model.
@@ -231,8 +269,9 @@ def calibrate(model: str,
         work_dir (str): The working directory for outputs.
     """
 
-    assert calib_dataset in ['c4', 'ptb', 'wikitext2', 'pileval'], \
-        'Support only `c4`, `ptb`, `wikitext2` or `pileval`.'
+    if custom_calib_data is None:
+        assert calib_dataset in ['c4', 'ptb', 'wikitext2', 'pileval'], \
+            'Support only `c4`, `ptb`, `wikitext2` or `pileval`.'
 
     model_type, _ = get_task(model)
     make_compatible_internvl_config(model)
@@ -286,7 +325,13 @@ def calibrate(model: str,
     _prepare_for_calibrate(model, layer_type, HEAD_NAME_MAP[type(model).__name__], device)
 
     print('Loading calibrate dataset ...')
-    calib_loader, _ = get_calib_loaders(calib_dataset, tokenizer, nsamples=calib_samples, seqlen=calib_seqlen)
+    if custom_calib_data is not None:
+        # Use custom calibration data
+        calib_loader = prepare_custom_calibration_data(tokenizer, custom_calib_data, calib_seqlen)
+        print(f'Using custom calibration data with {len(custom_calib_data)} samples')
+    else:
+        # Use standard dataset
+        calib_loader, _ = get_calib_loaders(calib_dataset, tokenizer, nsamples=calib_samples, seqlen=calib_seqlen)
 
     # Initialize calibration context
     if search_scale:
