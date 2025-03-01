@@ -3,7 +3,7 @@
 import os
 import os.path as osp
 import shutil
-from typing import Literal
+from typing import Literal, List, Optional
 
 import torch
 from torch import nn
@@ -52,7 +52,8 @@ def auto_awq(model: str,
              device: str = 'cuda',
              revision: str = None,
              dtype: Literal['float16', 'bfloat16', 'auto'] = 'auto',
-             download_dir: str = None):
+             download_dir: str = None,
+             custom_calib_data: Optional[List[str]] = None):
     """Perform weight quantization using AWQ algorithm.
 
     Args:
@@ -76,6 +77,8 @@ def auto_awq(model: str,
         dtype (str): Data type for loading model weights and calib infer.
         download_dir (str): Directory to download and load the weights,
             default to the default cache directory of huggingface.
+        custom_calib_data (Optional[List[str]]): List of text samples to use for 
+            custom calibration. If provided, calib_dataset will be ignored.
     """
     try_import_deeplink(device)
     if not osp.exists(model):
@@ -94,7 +97,8 @@ def auto_awq(model: str,
                                                      w_group_size=w_group_size,
                                                      search_scale=search_scale,
                                                      dtype=dtype,
-                                                     batch_size=batch_size)
+                                                     batch_size=batch_size,
+                                                     custom_calib_data=custom_calib_data)
 
     layer_type = LAYER_TYPE_MAP[type(model).__name__]
     fc2fcs = FC_FCS_MAP[layer_type]
