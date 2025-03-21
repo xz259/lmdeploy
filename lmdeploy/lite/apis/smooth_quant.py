@@ -1,7 +1,7 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 
 import os.path as osp
-from typing import Literal
+from typing import Literal, List, Optional
 
 import fire
 import torch
@@ -25,7 +25,8 @@ def smooth_quant(model: str,
                  device: str = 'cuda',
                  quant_dtype: Literal['int8', 'fp8', 'float8_e4m3fn', 'float8_e5m2'] = 'int8',
                  revision: str = None,
-                 download_dir: str = None):
+                 download_dir: str = None,
+                 custom_calib_data: Optional[List[str]] = None):
     if quant_dtype == 'fp8':
         quant_dtype = 'float8_e4m3fn'
 
@@ -42,6 +43,7 @@ def smooth_quant(model: str,
         from lmdeploy.utils import get_model
         model = get_model(model, revision=revision, download_dir=download_dir)
     model_path = model
+    # Update the calibrate call to pass the custom_calib_data parameter
     vl_model, model, tokenizer, work_dir = calibrate(model,
                                                      calib_dataset,
                                                      calib_samples,
@@ -52,7 +54,8 @@ def smooth_quant(model: str,
                                                      w_group_size=-1,
                                                      search_scale=search_scale,
                                                      dtype=dtype,
-                                                     batch_size=batch_size)
+                                                     batch_size=batch_size,
+                                                     custom_calib_data=custom_calib_data)
 
     # calibrate function exports the calibration statistics
     # (inputs, outputs, keys and values) to `work_dir`.
