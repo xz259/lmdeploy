@@ -261,7 +261,37 @@ class Deepseek(BaseChatTemplate):
         if 'deepseek-r1' in path or 'deepseek-v3' in path:
             return 'deepseek-r1'
 
+@MODELS.register_module(name='deepseek_r1_distill')
+class DeepseekR1DistillTemplate(BaseChatTemplate):
+    """Chat template for DeepSeek-R1-Distill models."""
 
+    def __init__(self,
+                 system='Please think step by step to solve this problem. Take your final answer modulo 1000 and return it within \\boxed{}.',
+                 meta_instruction=None,  # Not used in this template
+                 eosys='',
+                 user='<｜User｜>',
+                 eoh='',
+                 assistant='<｜Assistant｜><think>\n',  # Note the \n here
+                 eoa='<｜end▁of▁sentence｜>',
+                 stop_words=['<｜end▁of▁sentence｜>'],
+                 **kwargs):
+        super().__init__(system=system,
+                         meta_instruction=meta_instruction,
+                         eosys=eosys,
+                         user=user,
+                         eoh=eoh,
+                         assistant=assistant,
+                         eoa=eoa,
+                         stop_words=stop_words,
+                         **kwargs)
+
+    @classmethod
+    def match(cls, model_path: str) -> Optional[str]:
+        """Return the model_name that was registered to MODELS."""
+        path = model_path.lower()
+        if 'r1-distill' in path:
+            return 'deepseek_r1_distill'
+            
 @MODELS.register_module(name='cogvlm')
 class CogVLM(BaseChatTemplate):
     """Chat template of CogVLM model."""
